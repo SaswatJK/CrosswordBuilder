@@ -1,9 +1,8 @@
-askForWord :: Int -> IO ()
-askForWord i =
-    print("Write the " ++ show i ++ "th word") -- Even though print itself calls show, it calls show on the string first, not "each argument".
+import Data.Char (toUpper)
 
-takeNum :: Int -> Int
-takeNum x = x
+ask :: Int -> String -> IO ()
+ask i s =
+    print(s ++ " " ++ show i ++ " is: ") -- Even though print itself calls show, it calls show on the string first, not "each argument".
 
 data IntAndList = IntAndList {
     nue :: Int,
@@ -38,29 +37,57 @@ loop f g (IntAndList ialn iall) x y
 -- A monad takes in functions that return a monadic type, it has a monadic type, which then it return.
 
 data StringArr = StringArr {
-    str :: [String]
+    words :: [String],
+    explanations :: [String]
 } deriving (Show)
 
 reader :: () -> IO (StringArr)
 reader () = do
     line <- getLine
-    return (StringArr [line])
+    print(line)
+    return (StringArr [line] [])
 
-askAndRead :: (Int -> IO ()) -> (() -> IO (StringArr)) -> StringArr -> Int -> Int -> IO (StringArr)
-askAndRead f g (StringArr s) i j
-    | i > j = return (StringArr [" "])
+askAndRead :: (Int -> String -> IO ()) -> (() -> IO (StringArr)) -> String -> String -> StringArr -> Int -> Int -> IO (StringArr)
+askAndRead f g word description (StringArr w e) i j
+    | i > j = return (StringArr w e)
     | otherwise = do
-        f i
-        (StringArr x) <- g ()
-        askAndRead f g (StringArr(s ++ x)) (i + 1) j
+        f i word
+        (StringArr w1 w2) <- g ()
+        f i description
+        (StringArr e1 e2) <- g ()
+        askAndRead f g word description(StringArr (w ++ w1) (e ++ e1)) (i + 1) j
+
+makeWordUpper :: String -> String
+makeWordUpper s = [toUpper c | c <- s]
+
+countLetters :: String -> Int
+countLetters s = length [c | c <- s, isLetter c] --List comprehension isLetter is a filter/guard/condition that will only give to c if it passes. String is a list of chars, so I am passing each char to c through c <- s
+    where
+    isLetter c = ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
+
+countWords :: [String] -> [Int]
+countWords s = map countLetters s
+
+reverseQSByNumbers :: [(String, Int)] -> [(String, Int)]
+reverseQSByNumbers [] = []
+reverseQSByNumbers (p:ps) =
+    let smaller = [x | x <- ps, snd x <= snd p] --If second element (Int) of the rest of the pattern matched tail list is smaller than the head, it is added to the list.
+        larger = [x | x <- ps, snd x > snd p] --If second element (Int) of the rest of the pattern matched tail list is bigger than the head, it is added to the list.
+    in reverseQSByNumbers larger ++ [p] ++ reverseQSByNumbers smaller --in is a part of the let in expression where the let bindings are used in an expression.
+
+sortWords :: StringArr -> StringArr
+sortWords (StringArr s d) = sorted
+    where
+    s' = map makeWordUpper s --We can't reuse parameter names in the where block because 
+    count = countWords s'
+    sorted = (StringArr (map fst (reverseQSByNumbers (zip s' count))) (map fst (reverseQSByNumbers (zip d count))))
 
 main :: IO ()
 main = do
-    print("How many number of words do you want?")
-    print("This has been printed!")
-    --forLoop askForWord getLine 0 3
-    --print(addNum3(addNum5 3))
-    print(returnWithLogging (addNum3) (returnWithLogging (addNum5) (returnWithLogging (addNum5) (ialId 3)))) -- Monad??
-    print(loop addNum3 returnWithLogging (ialId 3) 3 5)
-    result <- askAndRead askForWord reader (StringArr [" "]) 1 3
-    print(result)
+    --print(returnWithLogging (addNum3) (returnWithLogging (addNum5) (returnWithLogging (addNum5) (ialId 3)))) -- Monad??
+    --print(loop addNum3 returnWithLogging (ialId 3) 3 5)
+    (StringArr w d) <- askAndRead ask reader "Word" "Hint" (StringArr [] []) 1 5
+    print(w)
+    let (StringArr nw nd) = sortWords (StringArr w d) --I'm doing let = instead of <- because it's not an IO typed variable I'm getting from the sortWords function. Using different names because binding the same name.
+    print(nw)
+    print(nd)
