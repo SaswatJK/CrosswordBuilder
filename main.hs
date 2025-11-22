@@ -75,19 +75,40 @@ reverseQSByNumbers (p:ps) =
         larger = [x | x <- ps, snd x > snd p] --If second element (Int) of the rest of the pattern matched tail list is bigger than the head, it is added to the list.
     in reverseQSByNumbers larger ++ [p] ++ reverseQSByNumbers smaller --in is a part of the let in expression where the let bindings are used in an expression.
 
-sortWords :: StringArr -> StringArr
+sortWords :: StringArr -> (StringArr, [Int])
 sortWords (StringArr s d) = sorted
     where
     s' = map makeWordUpper s --We can't reuse parameter names in the where block because 
     count = countWords s'
-    sorted = (StringArr (map fst (reverseQSByNumbers (zip s' count))) (map fst (reverseQSByNumbers (zip d count))))
+    sorted = ((StringArr (map fst (reverseQSByNumbers (zip s' count))) (map fst (reverseQSByNumbers (zip d count)))), count)
+
+gridWords :: (StringArr, [Int]) -> IO ()
+gridWords ((StringArr s d), numList) = do
+    --(1): Let's assume that we always start with across rather than down.
+    --Worst case scenario: For list of Words W1, W2, W3, W4, W5 .. Wn with respective length of words |W1|, |W2|, |W3|, |W4|, |W5| .. |Wn| with the assumption (1).
+    --The maximum size across (Sa) for the grid should be: |W1| + 2 * (|W3| - 1) + 2 * (W(k * 2 - 1) - 1) where k = 2 ... n/2
+    --The maximum size vertically (Sv) for the grid should be: |W2| + 2 * (|W4| - 1) + (W(k * 2) - 1) where k = 2 ... n/2
+    --The position i, j of the first word then should be i = ((Sa - |W1|) / 2), j = ((Sa - 1) / 2), where i ranges from 0 to (Sa - 1) and j ranges from 0 to (Sv - 1).
+    let numIndex = zip [0..] numList
+    let evenIndices = [e | (i, e) <- numIndex, mod i 2 == 0]
+    let oddIndices = [o | (i, o) <- numIndex, mod i 2 /= 0]
+    let sizeAcross =
+            let (h: ts) = evenIndices
+                processedTailEven = map (\x -> (x - 1) * 2) ts
+            in (sum (h : processedTailEven))
+    let sizeDown = (1 + (sum (map (\x -> (x - 1) * 2) oddIndices)))
+    let firstWordIndexI = div (sizeAcross - head numList) 2
+    let firstWordIndexJ = div (sizeDown - 1) 2
+    print(firstWordIndexI)
+
 
 main :: IO ()
 main = do
     --print(returnWithLogging (addNum3) (returnWithLogging (addNum5) (returnWithLogging (addNum5) (ialId 3)))) -- Monad??
     --print(loop addNum3 returnWithLogging (ialId 3) 3 5)
-    (StringArr w d) <- askAndRead ask reader "Word" "Hint" (StringArr [] []) 1 5
+    (StringArr w d) <- askAndRead ask reader "Word" "Hint" (StringArr [] []) 1 3
     print(w)
-    let (StringArr nw nd) = sortWords (StringArr w d) --I'm doing let = instead of <- because it's not an IO typed variable I'm getting from the sortWords function. Using different names because binding the same name.
+    let ((StringArr nw nd), lengthList) = sortWords (StringArr w d) --I'm doing let = instead of <- because it's not an IO typed variable I'm getting from the sortWords function. Using different names because binding the same name.
     print(nw)
     print(nd)
+    gridWords((StringArr nw nd), lengthList)
