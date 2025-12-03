@@ -1,4 +1,5 @@
 import Data.Char (toUpper)
+import Data.Array
 
 ask :: Int -> String -> IO ()
 ask i s =
@@ -82,6 +83,31 @@ sortWords (StringArr s d) = sorted
     count = countWords s'
     sorted = ((StringArr (map fst (reverseQSByNumbers (zip s' count))) (map fst (reverseQSByNumbers (zip d count)))), count)
 
+type Grid = Array (Int, Int) Char
+
+makeGrid :: Int -> Int -> Grid
+makeGrid rows columns =
+    array ((1, 1), (rows, columns))
+          [((i, j), '_') | i <- [1..rows], j <- [1..columns]]
+
+setCell :: Grid -> (Int, Int) -> Char -> Grid
+setCell grid pos char = grid // [(pos, char)]
+
+printGrid :: Grid -> IO ()
+printGrid grid =
+  let ((_, _), (maxR, maxC)) = bounds grid
+  in mapM_ putStrLn 
+       [[grid ! (r,c) | c <- [1..maxC]] | r <- [1..maxR]]
+
+setCells :: Grid -> [((Int, Int), Char)] -> Grid
+setCells grid updates = grid // updates
+
+placeWord :: String -> (Int, Int) -> Bool -> [((Int, Int), Char)]
+placeWord word (row, col) isAcross =
+  if isAcross
+    then [((row, col + i), c) | (i, c) <- zip [0..] word]
+    else [((row + i, col), c) | (i, c) <- zip [0..] word]
+
 gridWords :: (StringArr, [Int]) -> IO ()
 gridWords ((StringArr s d), numList) = do
     --(1): Let's assume that we always start with across rather than down.
@@ -97,10 +123,12 @@ gridWords ((StringArr s d), numList) = do
                 processedTailEven = map (\x -> (x - 1) * 2) ts
             in (sum (h : processedTailEven))
     let sizeDown = (1 + (sum (map (\x -> (x - 1) * 2) oddIndices)))
-    let firstWordIndexI = div (sizeAcross - head numList) 2
-    let firstWordIndexJ = div (sizeDown - 1) 2
+    let firstWordIndexI = (div (sizeAcross - head numList) 2) + 1 -- + 1 for both indices cause array indics in Haskell start from 1.
+    let firstWordIndexJ = (div (sizeDown - 1) 2) + 1
+    let initialGrid = makeGrid sizeAcross sizeDown
+    let grid' = (setCells initialGrid (placeWord (s !! 0) (firstWordIndexJ, firstWordIndexI) True))
+    printGrid grid'
     print(firstWordIndexI)
-
 
 main :: IO ()
 main = do
@@ -112,3 +140,4 @@ main = do
     print(nw)
     print(nd)
     gridWords((StringArr nw nd), lengthList)
+    --printGrid (makeGrid 2 2)
