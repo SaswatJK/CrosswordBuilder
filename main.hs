@@ -42,6 +42,11 @@ data StringArr = StringArr {
     explanations :: [String]
 } deriving (Show)
 
+data PlacedWordState = PlacedWordState {
+    word :: String,
+    isAcross :: Bool
+} deriving (Show)
+
 reader :: () -> IO (StringArr)
 reader () = do
     line <- getLine
@@ -108,27 +113,68 @@ placeWord word (row, col) isAcross =
     then [((row, col + i), c) | (i, c) <- zip [0..] word]
     else [((row + i, col), c) | (i, c) <- zip [0..] word]
 
+findCommonLetter :: String -> String -> Maybe (Char, Int, Int) -- The possible common character, and the positions of each in word of said character.
+findCommonLetter placed unplaced =
+    let positions = [(c, i, j) | (i, c) <- zip [0..] placed, elem c unplaced, let j = findIndex c unplaced] -- elem is a filter that will only keep c if it exists in the other array (which is a string).
+    in case positions of
+        [] -> Nothing --If the list of positions is empty, return nothing.
+        (x:_) -> Just x --If the list of positions has atleast one element, return the first one.
+    where
+        findIndex :: Char -> String -> Int
+        findIndex char s = head [i | (i, c) <- zip[0..] s, char == c]
+
+loopThroughUnplacedWords :: [String] -> [String] -> Int -> Int -> Int -> Maybe (Char, Int, Int, Int) -- This returns the character, the unplaced index, the positions of the letter in the first and the second words.
+loopThroughUnplacedWords placedWords unplacedWords unplacedWordsToBeCompared placedIndex unplacedIndex
+    | unplacedIndex >= unplacedWordsToBeCompared = Nothing
+    | otherwise =
+        case findCommonLetter (placedWords !! placedIndex) (unplacedWords !! unplacedIndex) of
+        Nothing -> loopThroughUnplacedWords placedWords unplacedWords unplacedWordsToBeCompared placedIndex (unplacedIndex + 1)
+        Just (char, posInFirstWord, posInSecondWord) -> Just (char, unplacedIndex, posInFirstWord, posInSecondWord)
+
+loopThroughPlacedWords :: [String] -> [String] -> Int -> Int -> Maybe (Char, Int, Int, Int, Int) -- This returns the character, the placed index, the unplaced index, the position in the first and the second words. (placed and unplaced respectively).
+loopThroughPlacedWords placedWords unplacedWords placedIndex placedWordsToBeCompared
+    | placedIndex >= placedWordsToBeCompared = Nothing
+    | otherwise =
+        let uwtbc = length unplacedWords
+        in case loopThroughUnplacedWords placedWords unplacedWords uwtbc placedIndex 0 of
+        Nothing -> loopThroughPlacedWords placedWords unplacedWords (placedIndex + 1) placedWordsToBeCompared
+        Just (char, ui, posInFirstWord, posInSecondWord) -> Just (char, placedIndex, ui, posInFirstWord, posInSecondWord)
+
+findCommonLetterBetweenWords :: [String] -> [String] -> Maybe (Char, Int, Int, Int, Int) --Returns the character in common, the offset from the placed word, the offset from the unplaced word, the position inside the placed word and the position inside the unplaced word.
+findCommonLetterBetweenWords placedWords unplacedWords =
+    let pwtbc = length placedWords
+    in case loopThroughPlacedWords placedWords unplacedWords 0 pwtbc of
+    Nothing -> Nothing
+    Just (char, placedIndex, ui, posInFirstWord, posInSecondWord) -> Just (char, placedIndex, ui, posInFirstWord, posInSecondWord)
+
 gridWords :: (StringArr, [Int]) -> IO ()
 gridWords ((StringArr s d), numList) = do
+    --I have an incorrect formula. If the First word intersects with the smallest word, and the second word intersects with the smallest word also, the ACROSS, will not have enough tiles!
     --(1): Let's assume that we always start with across rather than down.
     --Worst case scenario: For list of Words W1, W2, W3, W4, W5 .. Wn with respective length of words |W1|, |W2|, |W3|, |W4|, |W5| .. |Wn| with the assumption (1).
     --The maximum size across (Sa) for the grid should be: |W1| + 2 * (|W3| - 1) + 2 * (W(k * 2 - 1) - 1) where k = 2 ... n/2
     --The maximum size vertically (Sv) for the grid should be: |W2| + 2 * (|W4| - 1) + (W(k * 2) - 1) where k = 2 ... n/2
     --The position i, j of the first word then should be i = ((Sa - |W1|) / 2), j = ((Sa - 1) / 2), where i ranges from 0 to (Sa - 1) and j ranges from 0 to (Sv - 1).
     let numIndex = zip [0..] numList
-    let evenIndices = [e | (i, e) <- numIndex, mod i 2 == 0]
-    let oddIndices = [o | (i, o) <- numIndex, mod i 2 /= 0]
-    let sizeAcross =
+        evenIndices = [e | (i, e) <- numIndex, mod i 2 == 0]
+        oddIndices = [o | (i, o) <- numIndex, mod i 2 /= 0]
+        sizeAcross =
             let (h: ts) = evenIndices
                 processedTailEven = map (\x -> (x - 1) * 2) ts
             in (sum (h : processedTailEven))
-    let sizeDown = (1 + (sum (map (\x -> (x - 1) * 2) oddIndices)))
-    let firstWordIndexI = (div (sizeAcross - head numList) 2) + 1 -- + 1 for both indices cause array indics in Haskell start from 1.
-    let firstWordIndexJ = (div (sizeDown - 1) 2) + 1
-    let initialGrid = makeGrid sizeAcross sizeDown
-    let grid' = (setCells initialGrid (placeWord (s !! 0) (firstWordIndexJ, firstWordIndexI) True))
-    printGrid grid'
-    print(firstWordIndexI)
+        sizeDown = (1 + (sum (map (\x -> (x - 1) * 2) oddIndices)))
+        firstWordIndexI = (div (sizeAcross - head numList) 2) + 1 -- + 1 for both indices cause array indics in Haskell start from 1.
+        firstWordIndexJ = (div (sizeDown - 1) 2) + 1
+        initialGrid = makeGrid sizeDown sizeAcross
+        grid' = (setCells initialGrid (placeWord (s !! 0) (firstWordIndexJ, firstWordIndexI) True))
+        placedWords = [s !! 0]
+        unplacedWords = tail s
+        grid'' = case findCommonLetterBetweenWords placedWords unplacedWords of
+            Nothing -> grid'
+            Just (commonCharacter, placedWordOffset, unplacedWordOffset, placedIndex, unplacedIndex) -> (setCells grid' (placeWord (unplacedWords !! unplacedWordOffset) ((firstWordIndexJ - unplacedIndex), (firstWordIndexI + placedIndex)) False))
+
+    --in case findCommonLetterBetweenWords 
+    printGrid grid''
 
 main :: IO ()
 main = do
