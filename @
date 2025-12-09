@@ -1,16 +1,39 @@
-import Data.Char (toUpper)
+iconst char *, ...mport Data.Char (toUpper)
 import Data.Array
 
 ask :: Int -> String -> IO ()
 ask i s =
     print(s ++ " " ++ show i ++ " is: ") -- Even though print itself calls show, it calls show on the string first, not "each argument".
 
-askNum :: IO Int
-askNum = do
-    putStrLn "The number of words: "
-    numStr <- getLine
-    let num = read numStr :: Int
-    return num
+data IntAndList = IntAndList {
+    nue :: Int,
+    lst :: [Int]
+} deriving (Show)
+
+returnNumbers :: Int -> Int
+returnNumbers x = x
+
+addNum3 :: Int -> IntAndList
+addNum3 x = IntAndList (x + 3) [(x + 3)]
+
+addNum5 :: Int -> IntAndList
+addNum5 x = IntAndList (x + 5) [(x + 5)]
+
+ialId :: Int -> IntAndList
+ialId x =
+        IntAndList (x)
+                   ([x])
+
+returnWithLogging :: (Int -> IntAndList) -> IntAndList -> IntAndList
+returnWithLogging f (IntAndList ialn iall) = temp
+    where
+        IntAndList j1 j2 = f ialn
+        temp = IntAndList j1 (iall ++ j2)
+
+loop :: (Int -> IntAndList) -> ((Int -> IntAndList) -> IntAndList -> IntAndList) -> IntAndList -> Int -> Int -> IntAndList
+loop f g (IntAndList ialn iall) x y
+    | x > y = (IntAndList ialn iall)
+    | otherwise = loop f g (g f (IntAndList ialn iall)) (x + 1) (y)
 
 -- A monad takes in functions that return a monadic type, it has a monadic type, which then it return.
 
@@ -20,10 +43,8 @@ data StringArr = StringArr {
 } deriving (Show)
 
 data PlacedWordState = PlacedWordState {
-    word :: [String],
-    indexI :: [Int],
-    indexJ :: [Int],
-    isAcross :: [Bool]
+    word :: String,
+    isAcross :: Bool
 } deriving (Show)
 
 reader :: () -> IO (StringArr)
@@ -126,38 +147,6 @@ findCommonLetterBetweenWords placedWords unplacedWords =
     Nothing -> Nothing
     Just (char, placedIndex, ui, posInFirstWord, posInSecondWord) -> Just (char, placedIndex, ui, posInFirstWord, posInSecondWord)
 
-placeAllWords :: PlacedWordState -> [String] -> Grid -> Grid
-placeAllWords (PlacedWordState placedWords indexIs indexJs directions) unplacedWords originalGrid
-  | null unplacedWords = originalGrid
-  | otherwise =
-      case findCommonLetterBetweenWords placedWords unplacedWords of
-        Nothing -> originalGrid
-        Just (commonCharacter, placedWordOffset, unplacedWordOffset, placedIndex, unplacedIndex) ->
-          let placedWordIsHorizontal = directions !! placedWordOffset
-              commonLetterI = if placedWordIsHorizontal
-                              then indexIs !! placedWordOffset
-                              else indexIs !! placedWordOffset + placedIndex
-              commonLetterJ = if placedWordIsHorizontal
-                              then indexJs !! placedWordOffset + placedIndex
-                              else indexJs !! placedWordOffset
-              newWordStartI = if placedWordIsHorizontal
-                              then commonLetterI - unplacedIndex
-                              else commonLetterI
-              newWordStartJ = if placedWordIsHorizontal
-                              then commonLetterJ
-                              else commonLetterJ - unplacedIndex
-              wordToPlace = unplacedWords !! unplacedWordOffset
-              newGrid =
-                setCells originalGrid (placeWord wordToPlace (newWordStartI, newWordStartJ) (not placedWordIsHorizontal))
-              newPlacedWordState =
-                PlacedWordState (placedWords ++ [wordToPlace])
-                               (indexIs ++ [newWordStartI])
-                               (indexJs ++ [newWordStartJ])
-                               (directions ++ [not placedWordIsHorizontal])
-              remainingUnplacedWords = take unplacedWordOffset unplacedWords ++ drop (unplacedWordOffset + 1) unplacedWords
-              newerGrid = placeAllWords newPlacedWordState remainingUnplacedWords newGrid
-          in newerGrid
-
 gridWords :: (StringArr, [Int]) -> IO ()
 gridWords ((StringArr s d), numList) = do
     --I have an incorrect formula. If the First word intersects with the smallest word, and the second word intersects with the smallest word also, the ACROSS, will not have enough tiles!
@@ -165,35 +154,40 @@ gridWords ((StringArr s d), numList) = do
     --(2): The words are ordered in descending order with respect to the length.
     --Worst case scenario: For an ordered list of Words W1, W2, W3, W4, W5 .. Wn with respective length of words |W1|, |W2|, |W3|, |W4|, |W5| .. |Wn| with the assumption (1) and (2).
     --The maximum size across (Sa) for the grid should be: |W1| + 2 * (|W2| - 1) + 2 * (|W(k)| - 1) where k = 1 ... n/2
-    --The maximum size vertically (Sv) for the grid should be: 1 + 2 * (|W2| - 1) + 2 * (|W(k)| - 1) where k = 2 ... n/2
+    --The maximum size vertically (Sv) for the grid should be: |W2| + 2 * (|W3| - 1) + 2 * (|W(k)| - 1) where k = 2 ... n/2
     --The position i, j of the first word then should be i = ((Sa - |W1|) / 2), j = ((Sa - 1) / 2), where i ranges from 0 to (Sa - 1) and j ranges from 0 to (Sv - 1).
     let numIndex = zip [0..] numList
-        lengthOfListHalf = ((div (length numList + 1) 2))
+        lengthOfListHalf = (((length numList) / 2) + 1)
         halfIndices = [e | (i, e) <- numIndex, i <= lengthOfListHalf]
         sizeAcross =
             let (h: ts) = halfIndices
                 processedHalfIndices = map (\x -> (x - 1) * 2) ts
-            in (sum (h : processedHalfIndices) + 4)
+            in (sum (h : processedHalfIndices))
         sizeDown = 
             let (h: ts) = halfIndices
-                (h2:ts2) = ts
-                doubleProcessedHalfIndices = map (\x -> (x - 1) * 2) ts2
-            in (sum(h2: doubleProcessedHalfIndices) + 4)
-        firstWordIndexI = (div (sizeDown - 1) 2) + 1  -- row position
-        firstWordIndexJ = (div (sizeAcross - head numList) 2) + 1  -- column position
+                in let (h2: ts2) = ts
+                    doubleProcessedHalfIndices = map (\x -> (x - 1) * 2) ts2
+                    in (sum(h2: doubleProcessedHalfIndices))
+
+            
+        firstWordIndexI = (div (sizeAcross - head numList) 2) + 1 -- + 1 for both indices cause array indics in Haskell start from 1.
+        firstWordIndexJ = (div (sizeDown - 1) 2) + 1
         initialGrid = makeGrid sizeDown sizeAcross
-        grid' = (setCells initialGrid (placeWord (s !! 0) (firstWordIndexI, firstWordIndexJ) True))
-        firstPlacedWord = (PlacedWordState [(s !! 0)] [firstWordIndexI] [firstWordIndexJ] [True])
-        (h:unplacedWords) = s
-        grid'' = placeAllWords firstPlacedWord unplacedWords grid'
+        grid' = (setCells initialGrid (placeWord (s !! 0) (firstWordIndexJ, firstWordIndexI) True))
+        placedWords = [s !! 0]
+        unplacedWords = tail s
+        grid'' = case findCommonLetterBetweenWords placedWords unplacedWords of
+            Nothing -> grid'
+            Just (commonCharacter, placedWordOffset, unplacedWordOffset, placedIndex, unplacedIndex) -> (setCells grid' (placeWord (unplacedWords !! unplacedWordOffset) ((firstWordIndexJ - unplacedIndex), (firstWordIndexI + placedIndex)) False)) 
+
+    --in case findCommonLetterBetweenWords 
     printGrid grid''
 
 main :: IO ()
 main = do
     --print(returnWithLogging (addNum3) (returnWithLogging (addNum5) (returnWithLogging (addNum5) (ialId 3)))) -- Monad??
     --print(loop addNum3 returnWithLogging (ialId 3) 3 5)
-    n <- askNum
-    (StringArr w d) <- askAndRead ask reader "Word" "Hint" (StringArr [] []) 1 n
+    (StringArr w d) <- askAndRead ask reader "Word" "Hint" (StringArr [] []) 1 3
     print(w)
     let ((StringArr nw nd), lengthList) = sortWords (StringArr w d) --I'm doing let = instead of <- because it's not an IO typed variable I'm getting from the sortWords function. Using different names because binding the same name.
     print(nw)
